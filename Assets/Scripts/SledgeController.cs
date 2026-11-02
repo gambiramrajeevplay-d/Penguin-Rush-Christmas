@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Events;
 
 public enum VisualTiltTarget
 {
@@ -80,6 +81,30 @@ public class SledgeController : MonoBehaviour
     [Tooltip("Extra gravity while falling. Makes jumps snappy instead of floaty. 1 = normal gravity.")]
     [SerializeField] private float fallGravityMultiplier = 1.6f;
 
+    [Header("Obstacles")]
+    [Tooltip("Layer(s) of obstacles. Objects on these layers get disabled when the sledge hits them.")]
+    [SerializeField] private LayerMask obstacleLayer;
+    [Tooltip("List of particle effect prefabs. ALL of them spawn at the exact hit point, and every ParticleSystem inside each one (root + children) is played.")]
+    [SerializeField] private GameObject[] obstacleHitParticles;
+    [Tooltip("Seconds before the spawned particle objects are destroyed.")]
+    [SerializeField] private float particleLifetime = 2f;
+    [Tooltip("Sound played when an obstacle is hit.")]
+    [SerializeField] private AudioClip obstacleHitSound;
+    [Range(0f, 1f)]
+    [SerializeField] private float obstacleHitVolume = 1f;
+    [Tooltip("Optional. If empty, an AudioSource is created on the sledge automatically.")]
+    [SerializeField] private AudioSource audioSource;
+    [Tooltip("Hides every mesh (parent + children) of the sledge on hit. The GameObject itself stays active, so the effect and sound keep playing.")]
+    [SerializeField] private bool hideSledgeOnHit = true;
+    [Tooltip("Stops the sledge instantly at the hit point. If OFF, it slows to a stop over Fail Stop Duration.")]
+    [SerializeField] private bool freezeOnHit = true;
+    [Tooltip("Seconds the sledge takes to slow to a stop after hitting an obstacle (only used when Freeze On Hit is OFF).")]
+    [SerializeField] private float failStopDuration = 0.6f;
+    [Tooltip("Time passed to the GameManager before the Level Fail panel appears (when Freeze On Hit is ON).")]
+    [SerializeField] private float failPanelDelay = 0.6f;
+    [Tooltip("Fired when an obstacle is hit. Use it for camera shake, UI, etc.")]
+    public UnityEvent onObstacleHit;
+
     [Header("Performance / Frame Rate")]
     [Tooltip("Sets Application.targetFrameRate and turns VSync off. Mobile builds default to 30 FPS unless this is set.")]
     [SerializeField] private bool setTargetFrameRate = true;
@@ -129,6 +154,8 @@ public class SledgeController : MonoBehaviour
     private float stopDeceleration;
     private bool isGrounded;
     private bool isSliding;
+    private bool hasFailed;
+    private bool isFrozen;
 
     private float jumpBufferTimer;
     private float coyoteTimer;
@@ -146,6 +173,10 @@ public class SledgeController : MonoBehaviour
     // Smoothed slope pitch in radians (positive = uphill).
     private float smoothedPitch;
     private float visualPitchDeg;
+
+    // Cached so the sledge can be hidden without disabling the GameObject.
+    private Renderer[] sledgeRenderers;
+    private Collider[] sledgeColliders;
 
     private readonly VisualRig firstRig = new VisualRig();
     private readonly VisualRig secondRig = new VisualRig();
@@ -228,6 +259,8 @@ public class SledgeController : MonoBehaviour
         if (rb == null)
             rb = GetComponent<Rigidbody>();
 
+        SetupAudioSource();
+
         if (setTargetFrameRate)
         {
             QualitySettings.vSyncCount = 0;
@@ -251,6 +284,24 @@ public class SledgeController : MonoBehaviour
 
         firstRig.Setup(visualRoot);
         secondRig.Setup(secondVisualRoot);
+
+        // Cache everything that gets hidden / switched off on a hit.
+        sledgeRenderers = GetComponentsInChildren<Renderer>(true);
+        sledgeColliders = GetComponentsInChildren<Collider>(true);
+    }
+
+    // Uses the assigned AudioSource, then one already on the sledge, or creates one.
+    private void SetupAudioSource()
+    {
+        if (audioSource == null)
+            audioSource = GetComponent<AudioSource>();
+
+        if (audioSource == null)
+            audioSource = gameObject.AddComponent<AudioSource>();
+
+        audioSource.playOnAwake = false;
+        audioSource.loop = false;
+        audioSource.spatialBlend = 0f; // 2D sound, same volume everywhere.
     }
 
     private void Update()
@@ -269,6 +320,9 @@ public class SledgeController : MonoBehaviour
     {
         firstRig.RefreshChildren();
         secondRig.RefreshChildren();
+
+        sledgeRenderers = GetComponentsInChildren<Renderer>(true);
+        sledgeColliders = GetComponentsInChildren<Collider>(true);
     }
 
     private void ReadInput()
@@ -308,6 +362,10 @@ public class SledgeController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        // Frozen after a hit: the sledge stays exactly where it crashed.
+        if (isFrozen)
+            return;
+
         float dt = Time.fixedDeltaTime;
 
         jumpLockTimer = Mathf.Max(0f, jumpLockTimer - dt);
@@ -330,7 +388,7 @@ public class SledgeController : MonoBehaviour
 
         if (isStopping)
         {
-            // Finish line: slow down gradually until the sledge stands still.
+            // Finish line / level fail: slow down gradually until the sledge stands still.
             appliedForwardSpeed = Mathf.MoveTowards(
                 appliedForwardSpeed,
                 0f,
@@ -593,14 +651,161 @@ public class SledgeController : MonoBehaviour
         }
     }
 
+    // ---------- Obstacles ----------
+
+    private bool IsObstacle(GameObject other)
+    {
+        return (obstacleLayer.value & (1 << other.layer)) != 0;
+    }
+
+    // Spawns every prefab in the list at the hit point and plays ALL particle systems
+    // inside each one (root + every child, even inactive ones).
+    private void SpawnHitParticles(Vector3 hitPoint)
+    {
+        if (obstacleHitParticles == null)
+            return;
+
+        for (int i = 0; i < obstacleHitParticles.Length; i++)
+        {
+            GameObject prefab = obstacleHitParticles[i];
+            if (prefab == null)
+                continue;
+
+            // Not parented to the sledge, so hiding the sledge can't affect it.
+            GameObject fx = Instantiate(prefab, hitPoint, prefab.transform.rotation);
+            fx.SetActive(true);
+
+            ParticleSystem[] systems = fx.GetComponentsInChildren<ParticleSystem>(true);
+            for (int s = 0; s < systems.Length; s++)
+            {
+                systems[s].gameObject.SetActive(true);
+                systems[s].Play(false); // each system is played individually
+            }
+
+            Destroy(fx, particleLifetime);
+        }
+    }
+
+    private void HitObstacle(GameObject obstacle, Vector3 hitPoint)
+    {
+        // Level already ended (finished or failed): nothing more to do.
+        if (hasFailed)
+            return;
+
+        GameManager gm = GameManager.Instance;
+        if (gm != null && gm.IsFinished)
+            return;
+
+        hasFailed = true;
+
+        // Disable the obstacle so it can't be hit twice.
+        obstacle.SetActive(false);
+
+        // 1) Effects first, exactly at the contact point.
+        SpawnHitParticles(hitPoint);
+
+        // 2) Sound (the sledge GameObject stays active, so the clip is never cut off).
+        if (obstacleHitSound != null && audioSource != null)
+            audioSource.PlayOneShot(obstacleHitSound, obstacleHitVolume);
+
+        onObstacleHit?.Invoke();
+
+        // 3) Take control away and hide / stop the sledge.
+        canControl = false;
+
+        if (hideSledgeOnHit)
+            HideSledge();
+
+        float panelDelay;
+
+        if (freezeOnHit)
+        {
+            FreezeSledge();
+            panelDelay = failPanelDelay;
+        }
+        else
+        {
+            StopSmoothly(failStopDuration);
+            panelDelay = failStopDuration;
+        }
+
+        // 4) Show the Level Fail panel.
+        if (gm != null)
+            gm.OnPlayerFailed(panelDelay);
+    }
+
+    // Turns off every mesh of the sledge (parent + all children) and its colliders.
+    // The GameObject stays active so scripts, audio and the effect keep running.
+    private void HideSledge()
+    {
+        for (int i = 0; i < sledgeRenderers.Length; i++)
+        {
+            if (sledgeRenderers[i] != null)
+                sledgeRenderers[i].enabled = false;
+        }
+
+        for (int i = 0; i < sledgeColliders.Length; i++)
+        {
+            if (sledgeColliders[i] != null)
+                sledgeColliders[i].enabled = false;
+        }
+    }
+
+    // Stops the sledge exactly where it crashed.
+    private void FreezeSledge()
+    {
+        isFrozen = true;
+        isStopping = true;
+        appliedForwardSpeed = 0f;
+        currentHorizontalVelocity = 0f;
+
+        rb.velocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+        rb.isKinematic = true;
+    }
+
+    // Solid obstacle (non-trigger collider).
     private void OnCollisionEnter(Collision collision)
     {
+        if (hasFailed)
+            return;
+
+        GameObject other = collision.collider.gameObject;
+
+        if (IsObstacle(other))
+        {
+            // Exact point where the sledge touched the obstacle.
+            Vector3 point = collision.contactCount > 0
+                ? collision.GetContact(0).point
+                : other.transform.position;
+
+            HitObstacle(other, point);
+            return; // Obstacles are not walls: skip the wall logic.
+        }
+
         CollectWallContacts(collision);
     }
 
     private void OnCollisionStay(Collision collision)
     {
+        if (hasFailed)
+            return;
+
+        if (IsObstacle(collision.collider.gameObject))
+            return;
+
         CollectWallContacts(collision);
+    }
+
+    // Trigger obstacle (collider with "Is Trigger" ticked).
+    private void OnTriggerEnter(Collider other)
+    {
+        if (hasFailed || !IsObstacle(other.gameObject))
+            return;
+
+        // Closest point on the obstacle to the sledge = the contact point.
+        Vector3 point = other.ClosestPoint(transform.position);
+        HitObstacle(other.gameObject, point);
     }
 
     private void CollectWallContacts(Collision collision)
@@ -702,6 +907,7 @@ public class SledgeController : MonoBehaviour
 
     public bool IsGrounded() => isGrounded;
     public bool IsSliding() => isSliding;
+    public bool HasFailed() => hasFailed;
     public float GetCurrentSpeed() => currentSpeed;
 
     private void OnDrawGizmosSelected()
