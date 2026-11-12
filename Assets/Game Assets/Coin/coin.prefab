@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 8726626075627646507}
   - component: {fileID: 2015223791922100132}
   - component: {fileID: 3779746333728532688}
+  - component: {fileID: 908979491764005329}
   m_Layer: 0
   m_Name: coin
   m_TagString: Untagged
@@ -98,3 +99,24 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   rotationSpeed: 30
+--- !u!65 &908979491764005329
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3918995595889387646}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 0.0043044062, y: 0.0049524186, z: 0.0005000008}
+  m_Center: {x: -0.0000011996599, y: -0.0000010759104, z: 0.00020503192}
