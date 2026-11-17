@@ -5705,6 +5705,7 @@ GameObject:
   - component: {fileID: 1478937151412235632}
   - component: {fileID: 5234713166778518737}
   - component: {fileID: 6029059518724412632}
+  - component: {fileID: 1509253187964985736}
   m_Layer: 0
   m_Name: Player (5)
   m_TagString: Player
@@ -5861,7 +5862,7 @@ MonoBehaviour:
   obstacleHitParticles:
   - {fileID: 2159117630687702523, guid: ef2701cb6e400c542aa7ad01e981d01d, type: 3}
   particleLifetime: 2
-  obstacleHitSound: {fileID: 0}
+  obstacleHitSound: {fileID: 8300000, guid: 24097ddaa773e5d489bb64818b11bd21, type: 3}
   obstacleHitVolume: 1
   audioSource: {fileID: 0}
   hideSledgeOnHit: 1
@@ -5871,6 +5872,11 @@ MonoBehaviour:
   onObstacleHit:
     m_PersistentCalls:
       m_Calls: []
+  movementClip: {fileID: 8300000, guid: 8e4169a03ab1be544a195179af223df7, type: 3}
+  movementVolume: 0.7
+  pauseWhileSteering: 1
+  steeringSoundThreshold: 0.5
+  movementSoundMinSpeed: 0.1
   setTargetFrameRate: 1
   targetFrameRate: 60
   overridePhysicsRate: 1
@@ -5909,6 +5915,19 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.000551899, y: 0.00021937079, z: 0.00031200345}
   m_Center: {x: 0.00004453834, y: -0.00000052969784, z: 0.00011837163}
+--- !u!114 &1509253187964985736
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6437330872410491245}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 08c47e5378175d0438ec872c99679ec4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  coinClip: {fileID: 8300000, guid: 39a4d448956eb124c868627f8f6058d3, type: 3}
 --- !u!1 &7406167019865261009
 GameObject:
   m_ObjectHideFlags: 0

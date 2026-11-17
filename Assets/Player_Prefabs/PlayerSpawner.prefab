@@ -9,6 +9,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3693712088385686603}
+  - component: {fileID: 5030956532423191102}
   m_Layer: 0
   m_Name: PlayerSpawner
   m_TagString: Untagged
@@ -24,10 +25,31 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2086998850771111581}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.7419705, y: -0.37729, z: 2.044398}
+  m_LocalRotation: {x: -0.5, y: -0.5, z: -0.5, w: 0.5}
+  m_LocalPosition: {x: 1.12, y: -0.79, z: 2.126}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5030956532423191102
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2086998850771111581}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53a844136abe2644db53db13919a6afd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  truckPrefabs:
+  - {fileID: 6167025480491904031, guid: 7d006e7a1b4d2124a9497be743b43c6e, type: 3}
+  - {fileID: 3242441131053629418, guid: 5cfa8bcbda4c03245bce6c69d8a71b1e, type: 3}
+  - {fileID: 2888667098429971680, guid: 6ab32439478083f459f30cd9ec3caea7, type: 3}
+  - {fileID: 1895252139700110897, guid: 40232d8bf97d5914d92fb4d2e83694bc, type: 3}
+  - {fileID: 7338801150424212211, guid: 9215723fc565b634f986de6269ad2d78, type: 3}
+  - {fileID: 6437330872410491245, guid: bc316c8fe7eabcd4db584c5fbccc7747, type: 3}
+  - {fileID: 6670676507003028910, guid: 1667fe3914b681441857dda99afb4d78, type: 3}
+  - {fileID: 4160004649400788738, guid: 997e8270188974f45b12ee8640e330af, type: 3}

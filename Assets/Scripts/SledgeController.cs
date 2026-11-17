@@ -105,6 +105,18 @@ public class SledgeController : MonoBehaviour
     [Tooltip("Fired when an obstacle is hit. Use it for camera shake, UI, etc.")]
     public UnityEvent onObstacleHit;
 
+    [Header("Movement Sound")]
+    [Tooltip("Looping clip played while the sledge is moving. Uses its own AudioSource.")]
+    [SerializeField] private AudioClip movementClip;
+    [Range(0f, 1f)]
+    [SerializeField] private float movementVolume = 0.7f;
+    [Tooltip("Pause the clip while the sledge is steering left / right (resumes when going straight).")]
+    [SerializeField] private bool pauseWhileSteering = true;
+    [Tooltip("Sideways speed above which the sledge counts as steering.")]
+    [SerializeField] private float steeringSoundThreshold = 0.5f;
+    [Tooltip("Forward speed below which the sledge counts as stopped.")]
+    [SerializeField] private float movementSoundMinSpeed = 0.1f;
+
     [Header("Performance / Frame Rate")]
     [Tooltip("Sets Application.targetFrameRate and turns VSync off. Mobile builds default to 30 FPS unless this is set.")]
     [SerializeField] private bool setTargetFrameRate = true;
@@ -177,6 +189,9 @@ public class SledgeController : MonoBehaviour
     // Cached so the sledge can be hidden without disabling the GameObject.
     private Renderer[] sledgeRenderers;
     private Collider[] sledgeColliders;
+
+    // Dedicated source for the looping movement clip.
+    private AudioSource movementSource;
 
     private readonly VisualRig firstRig = new VisualRig();
     private readonly VisualRig secondRig = new VisualRig();
@@ -260,6 +275,7 @@ public class SledgeController : MonoBehaviour
             rb = GetComponent<Rigidbody>();
 
         SetupAudioSource();
+        SetupMovementSource();
 
         if (setTargetFrameRate)
         {
@@ -304,9 +320,21 @@ public class SledgeController : MonoBehaviour
         audioSource.spatialBlend = 0f; // 2D sound, same volume everywhere.
     }
 
+    // A dedicated AudioSource just for the looping movement clip.
+    private void SetupMovementSource()
+    {
+        movementSource = gameObject.AddComponent<AudioSource>();
+        movementSource.clip = movementClip;
+        movementSource.loop = true;
+        movementSource.playOnAwake = false;
+        movementSource.spatialBlend = 0f;
+        movementSource.volume = movementVolume;
+    }
+
     private void Update()
     {
         ReadInput();
+        UpdateMovementSound();
     }
 
     // Runs after Update and after any Animator, so nothing overwrites the tilt.
@@ -323,6 +351,50 @@ public class SledgeController : MonoBehaviour
 
         sledgeRenderers = GetComponentsInChildren<Renderer>(true);
         sledgeColliders = GetComponentsInChildren<Collider>(true);
+    }
+
+    // ---------- Movement sound ----------
+
+    private void UpdateMovementSound()
+    {
+        if (movementSource == null || movementClip == null)
+            return;
+
+        // Keep live Inspector changes in sync.
+        movementSource.volume = movementVolume;
+
+        // Stopped = failed, frozen, or slowed to a halt at the finish.
+        bool isMoving =
+            !hasFailed &&
+            !isFrozen &&
+            !HasStopped() &&
+            appliedForwardSpeed > movementSoundMinSpeed;
+
+        if (!isMoving)
+        {
+            // Fully stop (rewinds the clip).
+            if (movementSource.isPlaying)
+                movementSource.Stop();
+            return;
+        }
+
+        bool steering = pauseWhileSteering &&
+                        Mathf.Abs(currentHorizontalVelocity) > steeringSoundThreshold;
+        // To play ONLY while steering instead, use:
+        // bool steering = !(Mathf.Abs(currentHorizontalVelocity) > steeringSoundThreshold);
+
+        if (steering)
+        {
+            // Pause keeps the position, so it continues from the same spot.
+            if (movementSource.isPlaying)
+                movementSource.Pause();
+        }
+        else if (!movementSource.isPlaying)
+        {
+            movementSource.UnPause();           // resumes if it was paused
+            if (!movementSource.isPlaying)      // wasn't paused (was stopped), start fresh
+                movementSource.Play();
+        }
     }
 
     private void ReadInput()
@@ -351,6 +423,10 @@ public class SledgeController : MonoBehaviour
 
         if (Mathf.Abs(input) < 0.01f)
             input = Input.GetAxisRaw("Horizontal");
+
+        // Touch buttons from the GameManager (mobile / tablet).
+        if (Mathf.Abs(input) < 0.01f && GameManager.Instance != null)
+            input = GameManager.Instance.TouchHorizontal;
 
         horizontalInput = input;
 
@@ -700,6 +776,10 @@ public class SledgeController : MonoBehaviour
 
         // Disable the obstacle so it can't be hit twice.
         obstacle.SetActive(false);
+
+        // Movement loop stops immediately on a crash.
+        if (movementSource != null && movementSource.isPlaying)
+            movementSource.Stop();
 
         // 1) Effects first, exactly at the contact point.
         SpawnHitParticles(hitPoint);
