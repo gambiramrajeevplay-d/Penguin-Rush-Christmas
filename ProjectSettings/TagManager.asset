@@ -19,7 +19,7 @@ TagManager:
   - UI
   - Ground
   - Obstacle
-  - 
+  - Snow
   - 
   - 
   - 
@@ -46,4 +46,7 @@ TagManager:
   m_SortingLayers:
   - name: Default
     uniqueID: 0
+    locked: 0
+  - name: Snow
+    uniqueID: 2329774675
     locked: 0

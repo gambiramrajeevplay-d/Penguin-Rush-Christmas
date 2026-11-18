@@ -124,4 +124,9 @@ public class ButtonHighlighter : MonoBehaviour
             butt.GetComponent<Outline>().enabled = false;
         }
     }
+    public void setHighlighter(GameObject defaultButton)
+    {
+        EventSystem.current.SetSelectedGameObject(defaultButton);
+    }
+
 }

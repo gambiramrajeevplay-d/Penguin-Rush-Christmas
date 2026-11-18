@@ -1,6 +1,7 @@
 ﻿using Script;
 using System.Collections;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.Purchasing;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -23,7 +24,12 @@ public class Level_Button : MonoBehaviour
     [SerializeField] private GameObject loadingScreen;
     [SerializeField] private GameObject loadingScreentab;
 
+    [Header("Controls Panel (TV only)")]
+    [SerializeField] private GameObject controlsPanel;
+    [SerializeField] private Button controlsOkButton;
+
     private Button levelButton;
+    private bool isLoading = false;
 
     private void Awake()
     {
@@ -37,6 +43,10 @@ public class Level_Button : MonoBehaviour
 
         levelButton.onClick.RemoveAllListeners();
         levelButton.onClick.AddListener(LoadLevel);
+
+        // Controls panel should be hidden at start
+        if (controlsPanel)
+            controlsPanel.SetActive(false);
     }
 
     private void EnsureInitialized()
@@ -133,6 +143,9 @@ public class Level_Button : MonoBehaviour
 
     private void LoadLevel()
     {
+        if (isLoading)
+            return;
+
         int unlockedAll = PlayerPrefs.GetInt(StringsData.unlockedAllLevels, 0);
 
         if (isPaidLevel && unlockedAll == 0)
@@ -143,6 +156,8 @@ public class Level_Button : MonoBehaviour
             return;
         }
 
+        isLoading = true;
+
         // Save selected level
         PlayerPrefs.SetInt(StringsData.levelToLoad, levelToLoad);
         PlayerPrefs.Save();
@@ -152,6 +167,66 @@ public class Level_Button : MonoBehaviour
         string targetScene = sceneNameToLoad;
 
         // Configure loading screen
+        SetLoadingScreen(true);
+
+        StartCoroutine(LoadLevelWithDelay(targetScene));
+    }
+
+    private IEnumerator LoadLevelWithDelay(string sceneName)
+    {
+        // Loading screen is visible during this time
+        yield return new WaitForSeconds(3f);
+
+        bool isTv = AndroidTV.IsAndroidOrFireTv();
+
+        // TV only: show controls panel and wait for OK
+        if (isTv && controlsPanel != null && controlsOkButton != null)
+        {
+            // Loading finished -> hide loading screens
+            SetLoadingScreen(false);
+
+            controlsPanel.SetActive(true);
+
+            controlsOkButton.onClick.RemoveAllListeners();
+            controlsOkButton.onClick.AddListener(() => OnControlsOkClicked(sceneName));
+
+            // Select OK button so TV remote / controller can press it
+            if (EventSystem.current != null)
+            {
+                EventSystem.current.SetSelectedGameObject(null);
+                EventSystem.current.SetSelectedGameObject(controlsOkButton.gameObject);
+            }
+        }
+        else
+        {
+            // Mobile / Tab (or no panel assigned): load the level directly
+            SceneManager.LoadScene(sceneName);
+        }
+    }
+
+    private void OnControlsOkClicked(string sceneName)
+    {
+        controlsOkButton.onClick.RemoveAllListeners();
+
+        if (controlsPanel)
+            controlsPanel.SetActive(false);
+
+        SceneManager.LoadScene(sceneName);
+    }
+
+    private void SetLoadingScreen(bool show)
+    {
+        if (!show)
+        {
+            if (loadingScreen)
+                loadingScreen.SetActive(false);
+
+            if (loadingScreentab)
+                loadingScreentab.SetActive(false);
+
+            return;
+        }
+
         if (AndroidTV.IsAndroidOrFireTv())
         {
             if (loadingScreen)
@@ -168,15 +243,6 @@ public class Level_Button : MonoBehaviour
             if (loadingScreentab)
                 loadingScreentab.SetActive(true);
         }
-
-        StartCoroutine(LoadLevelWithDelay(targetScene));
-    }
-
-    private IEnumerator LoadLevelWithDelay(string sceneName)
-    {
-        yield return new WaitForSeconds(3f);
-
-        SceneManager.LoadScene(sceneName);
     }
 
     public int GetLevelNumberSafe()
